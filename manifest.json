@@ -1,0 +1,18 @@
+{
+  "id": "./index.html",
+  "name": "GardenPress - Garden Planner",
+  "short_name": "GardenPress",
+  "description": "Plan your vegetable garden: draw raised beds, place 60+ vegetables, herbs and flowers with square foot spacing, get a planting calendar from your frost dates and companion planting warnings. Private, offline, no subscription.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f4ee",
+  "theme_color": "#2e7d32",
+  "categories": ["productivity", "lifestyle", "utilities"],
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

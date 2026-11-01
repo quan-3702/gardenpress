@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GardenPress – Garden Planner</title>
+  <meta name="description" content="Plan your vegetable garden on Windows: draw raised beds, drag in 60+ vegetables, herbs and flowers with square foot spacing, get a planting calendar from your frost dates, companion and crop rotation warnings. Print your plan. Private, offline, no subscription.">
+  <meta name="theme-color" content="#2e7d32">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img src="icon-192.png" alt="" width="30" height="30"><span>GardenPress</span></div>
+    <nav class="tabs" id="tabs">
+      <button data-t="layout" class="on">🗺 Layout</button>
+      <button data-t="calendar">📅 Calendar</button>
+      <button data-t="plants">🌱 Plants</button>
+      <button data-t="journal">📓 Journal</button>
+    </nav>
+    <div class="top-btns">
+      <select id="docPick" title="Your garden plans"></select>
+      <button id="moreBtn" class="tb">☰ More</button>
+      <button id="proBtn" class="pro-btn" hidden>★ Get Pro</button>
+    </div>
+    <div id="menu" class="menu" hidden>
+      <button id="newDocBtn">＋ New garden plan</button>
+      <button id="nextSeasonBtn">↻ Start next season (keeps beds, checks rotation) ★</button>
+      <button id="renameDocBtn">✎ Rename this plan</button>
+      <button id="delDocBtn" class="danger">🗑 Delete this plan…</button>
+      <hr>
+      <button id="printBtn2">🖨 Print the garden plan</button>
+      <button id="printCalBtn">📅 Print planting calendar ★</button>
+      <button id="printLabelsBtn">🏷 Print plant labels ★</button>
+      <button id="printShopBtn">🛒 Print seed &amp; plant shopping list ★</button>
+      <hr>
+      <button id="backupBtn">💾 Back up everything (.json)</button>
+      <button id="restoreFileBtn">📂 Restore a backup…</button>
+      <button id="sampleBtn">✨ Open a sample garden</button>
+      <hr>
+      <a href="help.html" target="_blank" rel="noopener">❓ How to use GardenPress</a>
+      <a href="why.html" target="_blank" rel="noopener">💡 Why GardenPress – compare</a>
+      <a href="mailto:thequan03072002@gmail.com?subject=GardenPress%20feedback">✉ Feedback &amp; support</a>
+    </div>
+    <input id="fileIn" type="file" hidden>
+  </header>
+
+  <!-- LAYOUT -->
+  <main class="pane" id="layoutPane">
+    <section class="side" id="side">
+      <div id="selBox"></div>
+      <h2>Tools</h2>
+      <div class="tools" id="tools">
+        <button data-tool="select" class="on" title="Select, move and resize (Esc)">✋ Select</button>
+        <button data-tool="erase" title="Remove plants">⌫ Erase</button>
+      </div>
+      <div class="tools add">
+        <button id="addBed">▭ Raised bed</button>
+        <button id="addRow">▬ In-ground bed</button>
+        <button id="addPot">◯ Container</button>
+        <button id="addPath">▒ Path</button>
+      </div>
+      <h2>Plants <span class="muted" id="plantHint">– pick one, then click squares in a bed</span></h2>
+      <input id="plantSearch" placeholder="Search plants…">
+      <div class="chips" id="catChips"></div>
+      <div class="palette" id="palette"></div>
+      <button id="customPlantBtn" class="add-btn">＋ Add your own plant ★</button>
+    </section>
+    <section class="main-col canvas-col">
+      <div class="bar">
+        <b id="gName" class="gname"></b>
+        <span class="muted" id="gInfo"></span>
+        <button id="gSettingsBtn" class="ghost mini">⚙ Garden settings</button>
+        <span class="grow"></span>
+        <button id="warnBtn" class="warn-chip" hidden></button>
+        <button id="undoBtn" class="ghost mini" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button id="zoomOut" class="ghost mini" title="Zoom out">－</button>
+        <button id="zoomIn" class="ghost mini" title="Zoom in">＋</button>
+        <button id="printBtn" class="primary">🖨 Print</button>
+      </div>
+      <div class="canvas-wrap" id="canvasWrap"><div class="ground" id="ground"></div></div>
+      <div class="legend" id="legend"></div>
+    </section>
+  </main>
+
+  <!-- CALENDAR -->
+  <main class="page" id="calendarPane" hidden>
+    <div class="page-in wide-in">
+      <div class="ph-row"><h1 class="ph">📅 Planting calendar</h1><span class="grow"></span><button id="frostBtn" class="ghost">❄ Frost dates</button><button id="printCal" class="primary">🖨 Print calendar ★</button></div>
+      <p class="hint" id="calHint"></p>
+      <div class="todo" id="todo"></div>
+      <div class="cal-legend"><span class="k ind"></span> Start seeds indoors <span class="k out"></span> Plant out / sow outside <span class="k suc"></span> Sow again (succession) <span class="k har"></span> Harvest</div>
+      <div class="table-wrap"><div class="gantt" id="gantt"></div></div>
+    </div>
+  </main>
+
+  <!-- PLANTS -->
+  <main class="page" id="plantsPane" hidden>
+    <div class="page-in wide-in">
+      <div class="ph-row"><h1 class="ph">🌱 Plant guide</h1><span class="grow"></span><input id="libSearch" placeholder="Search…" style="width:240px"></div>
+      <p class="hint">Spacing uses square foot gardening: how many plants fit in one 1 ft × 1 ft (30 × 30 cm) square. Timing is counted from your last spring frost.</p>
+      <div class="lib" id="lib"></div>
+    </div>
+  </main>
+
+  <!-- JOURNAL -->
+  <main class="page" id="journalPane" hidden>
+    <div class="page-in wide-in">
+      <div class="ph-row"><h1 class="ph">📓 Garden journal <span class="pro-tag">Pro</span></h1><span class="grow"></span><button id="addNoteBtn" class="ghost">＋ Note</button><button id="addHarvestBtn" class="primary">🧺 Log a harvest</button></div>
+      <div class="app-stats" id="harvestStats"></div>
+      <div class="table-wrap"><table class="guests" id="jTable"></table></div>
+      <p class="hint" id="jHint"></p>
+    </div>
+  </main>
+
+  <!-- dialogs -->
+  <dialog id="setDlg" class="dlg">
+    <h2>Garden settings</h2>
+    <label class="field">Plan name<input id="sName"></label>
+    <div class="two"><label class="field">Season (year)<input id="sYear" type="number" min="2000" max="2100"></label><label class="field">Units<select id="sUnits"><option value="ft">Feet (1 square = 1 ft)</option><option value="m">Metric (1 square = 30 cm)</option></select></label></div>
+    <div class="two"><label class="field">Garden width (squares)<input id="sW" type="number" min="4" max="120"></label><label class="field">Garden length (squares)<input id="sH" type="number" min="4" max="120"></label></div>
+    <h3 class="sub">❄ Frost dates</h3>
+    <label class="field">Pick your USDA hardiness zone to fill typical dates<select id="sZone"><option value="">– choose –</option></select></label>
+    <div class="two"><label class="field">Last spring frost<input id="sLast" type="date"></label><label class="field">First fall frost<input id="sFirst" type="date"></label></div>
+    <p class="hint">Zone dates are averages. For the best calendar, enter the dates for your town (search “last frost date” plus your zip code) – they move every planting date.</p>
+    <div class="row-btns"><button id="sSave" class="primary">Save</button><button id="sCancel" class="ghost">Cancel</button></div>
+  </dialog>
+
+  <dialog id="warnDlg" class="dlg">
+    <h2>Garden check</h2>
+    <ul class="checks" id="warnList"></ul>
+    <div class="row-btns"><button id="warnClose" class="ghost">Close</button></div>
+  </dialog>
+
+  <dialog id="jDlg" class="dlg">
+    <h2 id="jDlgTitle">Journal</h2>
+    <div class="two"><label class="field">Date<input id="jDate" type="date"></label><label class="field">Plant<select id="jPlant"></select></label></div>
+    <div class="two" id="jQtyRow"><label class="field">Amount<input id="jQty" type="number" min="0" step="any"></label><label class="field">Unit<select id="jUnit"><option>lb</option><option>kg</option><option>oz</option><option>g</option><option>pieces</option><option>bunches</option></select></label></div>
+    <label class="field">Notes<textarea id="jText" rows="3" placeholder="What did you do or notice?"></textarea></label>
+    <div class="row-btns"><button id="jSave" class="primary">Save</button><button id="jDel" class="ghost danger">Delete</button><button id="jCancel" class="ghost">Cancel</button></div>
+  </dialog>
+
+  <dialog id="cpDlg" class="dlg">
+    <h2>Your own plant</h2>
+    <div class="two"><label class="field">Name<input id="cpName" placeholder="e.g. Cherokee Purple tomato"></label><label class="field">Same family and timing as<select id="cpBase"></select></label></div>
+    <div class="two"><label class="field">Plants per square<input id="cpSq" type="number" min="1" max="16"></label><label class="field">Days to maturity<input id="cpDtm" type="number" min="10" max="400"></label></div>
+    <label class="field">Icon<input id="cpIc" maxlength="4" placeholder="🍅"></label>
+    <div class="row-btns"><button id="cpSave" class="primary">Add plant</button><button id="cpCancel" class="ghost">Cancel</button></div>
+  </dialog>
+
+  <dialog id="proDialog" class="dlg">
+    <h2>GardenPress Pro</h2>
+    <p class="muted">One-time purchase. Yours forever on this Microsoft account – no yearly subscription. Popular online garden planners cost about $35 every year.</p>
+    <ul class="pro-list">
+      <li><strong>Unlimited garden plans and seasons</strong> <span class="muted">(Free: 1 plan)</span></li>
+      <li><strong>Crop rotation check</strong> – start next season and see which beds grew the same family last year</li>
+      <li><strong>Printable planting calendar</strong>, plant labels and seed shopping list</li>
+      <li><strong>Garden journal and harvest log</strong> with totals per crop</li>
+      <li><strong>Your own plants and varieties</strong></li>
+    </ul>
+    <p id="proMsg" class="pro-msg" hidden></p>
+    <p id="trialInfo" class="pro-msg" hidden></p>
+    <div class="row-btns">
+      <button id="trialBtn" class="ghost" hidden>Try every Pro feature free for 7 days</button>
+      <button id="buyBtn" class="primary">Unlock Pro</button>
+      <button id="restoreBtn" class="ghost">Restore purchase</button>
+      <button id="closePro" class="ghost">Not now</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <div id="printArea"></div>
+  <script src="plants.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
