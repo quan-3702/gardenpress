@@ -26,7 +26,7 @@ async function dbDel(k) { const d = await db(); return new Promise((res, rej) =>
 const STORE_BILLING = 'https://store.microsoft.com/billing';
 const PRO_SKU = 'gardenpress_pro';
 const PRO_IDS = [PRO_SKU];
-let STORE_URL = 'https://apps.microsoft.com/search?query=GardenPress';
+let STORE_URL = 'https://apps.microsoft.com/detail/9PNG3GQMPCWK';
 let proAvailable = false, proSku = PRO_SKU, isPro = false;
 try { isPro = localStorage.getItem('gardenpress-pro') === '1'; } catch (_) {}
 const TRIAL_DAYS = 7;
