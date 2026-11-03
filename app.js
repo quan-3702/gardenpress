@@ -28,7 +28,7 @@ const PRO_SKU = 'gardenpress_pro';
 const PRO_IDS = [PRO_SKU];
 let STORE_URL = 'https://apps.microsoft.com/detail/9PNG3GQMPCWK';
 let proAvailable = false, proSku = PRO_SKU, isPro = false;
-try { if ('getDigitalGoodsService' in window && localStorage.getItem('gardenpress-proavail') === '1') proAvailable = true; } catch (_) {} // keep Pro limits when offline
+proAvailable = true; // owner's rule: Pro is never free – free limits apply everywhere (website, Store, offline) until Pro is bought
 try { isPro = localStorage.getItem('gardenpress-pro') === '1'; } catch (_) {}
 const TRIAL_DAYS = 7;
 let trialStart = 0;
@@ -76,7 +76,6 @@ async function checkPro() {
   if (!svc) return false;
   try {
     const details = await svc.getDetails(PRO_IDS).catch(() => []);
-    if (details.length) { proAvailable = true; try { localStorage.setItem('gardenpress-proavail', '1'); } catch (_) {} }
     if (details[0]) { proSku = details[0].itemId; if (!PRO_IDS.includes(proSku)) PRO_IDS.push(proSku); }
     const list = await svc.listPurchases();
     const owned = list.some((p) => PRO_IDS.includes(p.itemId));
@@ -97,6 +96,7 @@ async function openPro(reason) {
     $('restoreBtn').hidden = false;
     try {
       const [d] = await svc.getDetails([proSku]);
+      if (!d) proMessage((reason ? reason + ' ' : '') + 'Pro is being added to the Microsoft Store and will be on sale very soon – please check again in a day or two.');
       const price = d && d.price ? new Intl.NumberFormat(undefined, { style: 'currency', currency: d.price.currency }).format(Number(d.price.value)) : '';
       $('buyBtn').textContent = price ? `Unlock Pro – ${price}` : 'Unlock Pro';
     } catch (_) { $('buyBtn').textContent = 'Unlock Pro'; }
@@ -120,6 +120,9 @@ async function buyPro() {
   if (await checkProAfterBuy()) { proMessage('Thank you! Pro is unlocked. ★'); setTimeout(() => $('proDialog').close(), 1500); }
 }
 const needsPro = (why) => { if (unlocked()) return false; openPro(why); return true; };
+// plans beyond the free one (made during the trial or restored earlier) can be viewed, backed up or deleted; editing or printing them needs Pro
+const lockedPlan = () => !unlocked() && docs.findIndex((d) => d.id === cur) >= FREE_DOCS;
+const planNeedsPro = () => lockedPlan() && needsPro(`The free version keeps ${FREE_DOCS} garden plan. You can view, back up or delete this one – Pro lets you edit and print every plan.`);
 
 // ---------- toast ----------
 let toastT = 0;
@@ -370,9 +373,9 @@ function renderPalette() {
   const q = $('plantSearch').value.trim().toLowerCase();
   $('catChips').innerHTML = [['', 'All'], ...Object.entries(CATS)].map(([k, v]) => `<button data-c="${k}" class="${cat === k ? 'on' : ''}">${v}</button>`).join('');
   const list = allPlants().filter((p) => (!cat || p.cat === cat) && (!q || p.name.toLowerCase().includes(q)));
-  $('palette').innerHTML = list.map((p) => `<button data-p="${p.id}" class="${plantSel === p.id && tool === 'plant' ? 'on' : ''}" title="${esc(p.name)}"><span class="pi" style="background:${p.col}33;border-color:${p.col}">${p.ic}</span><span class="pn">${esc(p.name)}</span><small>${p.size > 1 ? p.size + '×' + p.size : p.sq + '/sq'}</small></button>`).join('') || '<p class="hint">No plants found.</p>';
+  $('palette').innerHTML = list.map((p) => `<button data-p="${p.id}" class="${plantSel === p.id && tool === 'plant' ? 'on' : ''}" title="${esc(p.name)}"><span class="pi" style="background:${p.col}33;border-color:${p.col}">${p.ic}</span><span class="pn">${esc(p.name)}${p.custom && !unlocked() ? ' ★' : ''}</span><small>${p.size > 1 ? p.size + '×' + p.size : p.sq + '/sq'}</small></button>`).join('') || '<p class="hint">No plants found.</p>';
 }
-function pickPlant(id) { plantSel = id; tool = 'plant'; selPl = ''; renderPalette(); renderLayout(); }
+function pickPlant(id) { if (P(id).custom && needsPro('Your own plants and varieties are part of Pro.')) return; plantSel = id; tool = 'plant'; selPl = ''; renderPalette(); renderLayout(); }
 function setTool(t) { tool = t; if (t !== 'plant') plantSel = ''; renderPalette(); renderLayout(); }
 
 // ---------- beds ----------
@@ -383,6 +386,7 @@ function freeSpot(w, h) {
   return { x: 0, y: 0 };
 }
 function addBed(type) {
+  if (planNeedsPro()) return;
   const [w, h] = type === 'pot' ? [2, 2] : type === 'path' ? [G.w > 12 ? 12 : G.w, 2] : type === 'ground' ? [3, 10] : [4, 8];
   const s = freeSpot(Math.min(w, G.w), Math.min(h, G.h));
   pushUndo();
@@ -426,6 +430,7 @@ function cellFromEvent(e) {
 function bedAt(gx, gy) { for (let i = G.beds.length - 1; i >= 0; i--) { const b = G.beds[i]; if (gx >= b.x && gx < b.x + b.w && gy >= b.y && gy < b.y + b.h) return b; } return null; }
 function onDown(e) {
   if (e.button !== 0 || !G) return;
+  if (lockedPlan()) { planNeedsPro(); return; }
   const c = cellFromEvent(e);
   if (e.target.dataset.handle) { const bed = bedById(selBed); pushUndo(); drag = { kind: 'resize', bed, sx: c.px, sy: c.py, w: bed.w, h: bed.h }; e.preventDefault(); return; }
   const bed = bedAt(c.gx, c.gy);
@@ -590,6 +595,7 @@ function printHtml(html, landscape) {
 }
 const printHead = (title) => `<div class="pr-head"><b>${esc(G.name)}</b> – ${title}<span>Season ${G.year} · last frost ${fmtD(LF())} · first frost ${fmtD(FF())}</span></div>`;
 function printLayout() {
+  if (planNeedsPro()) return;
   const land = G.w > G.h * 1.15;
   const maxW = land ? 960 : 700, maxH = land ? 560 : 640;
   const z = Math.max(8, Math.min(44, Math.floor(Math.min(maxW / G.w, maxH / G.h))));
@@ -629,7 +635,14 @@ async function restoreBackup(file) {
   try {
     const o = JSON.parse(await file.text());
     if (o.app !== 'gardenpress' || !o.plans) throw new Error('not a GardenPress backup');
-    if (!confirm('Restore this backup? Plans with the same name are replaced; other plans are kept.')) return;
+    const inFile = (o.docs || []).filter((d) => o.plans[d.id]);
+    let replace = false;
+    if (!unlocked() && docs.length + inFile.filter((d) => !docs.some((x) => x.id === d.id)).length > FREE_DOCS) {
+      if (inFile.length > FREE_DOCS || docs.length > FREE_DOCS) return openPro(`This backup holds ${inFile.length} garden plans. The free version keeps ${FREE_DOCS} – Pro opens all of them. The backup file is unchanged, so nothing is lost.`);
+      if (!confirm('The free version keeps one garden plan. Replace your current plan with the one in this backup? (Unlock Pro to keep both.)')) return;
+      replace = true;
+    } else if (!confirm('Restore this backup? Plans with the same name are replaced; other plans are kept.')) return;
+    if (replace) { clearTimeout(saveT); for (const d of docs) if (!inFile.some((x) => x.id === d.id)) await dbDel('g:' + d.id); docs = []; G = null; }
     for (const d of o.docs || []) { if (!o.plans[d.id]) continue; await dbSet('g:' + d.id, o.plans[d.id]); if (!docs.some((x) => x.id === d.id)) docs.push(d); }
     if (Array.isArray(o.custom)) { for (const c of o.custom) if (!custom.some((x) => x.id === c.id)) custom.push(c); await dbSet('custom', custom); applyCustom(); }
     await saveDocs(); await loadDoc((o.docs && o.docs[0] && o.docs[0].id) || cur); toast('Backup restored.');
@@ -655,6 +668,7 @@ function sampleGarden() {
 
 // ---------- settings dialog ----------
 function openSettings() {
+  if (planNeedsPro()) return;
   $('sName').value = G.name; $('sYear').value = G.year; $('sUnits').value = G.units; $('sW').value = G.w; $('sH').value = G.h;
   $('sZone').value = G.zone || ''; $('sLast').value = G.last; $('sFirst').value = G.first;
   $('setDlg').showModal();
@@ -677,7 +691,7 @@ function bind() {
     const g = blankGarden(n.trim() || 'My garden'); Object.assign(g, { units: G.units, zone: G.zone, last: shiftYear(G.last, g.year), first: shiftYear(G.first, g.year) }); newDoc(g);
   };
   $('nextSeasonBtn').onclick = nextSeason;
-  $('renameDocBtn').onclick = () => { const n = prompt('Rename this plan:', G.name); if (n && n.trim()) { G.name = n.trim(); save(); syncDoc(); renderAll(); } };
+  $('renameDocBtn').onclick = () => { if (planNeedsPro()) return; const n = prompt('Rename this plan:', G.name); if (n && n.trim()) { G.name = n.trim(); save(); syncDoc(); renderAll(); } };
   $('delDocBtn').onclick = async () => {
     if (!confirm(`Delete “${G.name}” for good? Make a backup first if you might need it.`)) return;
     await dbDel('g:' + cur); docs = docs.filter((d) => d.id !== cur);
@@ -692,6 +706,7 @@ function bind() {
   $('sampleBtn').onclick = async () => {
     const g = sampleGarden();
     if (docs.length >= FREE_DOCS && !unlocked()) {
+      if (planNeedsPro()) return;
       if (!confirm('The free version keeps one garden plan. Replace your current plan with the sample? (Unlock Pro to keep both.)')) return;
       await saveNow(); undoStack.push(JSON.stringify(G.beds));
       Object.assign(G, { name: g.name, w: g.w, h: g.h, beds: g.beds }); save(); syncDoc(); selBed = ''; renderAll(); toast('Sample loaded – Ctrl+Z brings your beds back.'); return;
@@ -708,18 +723,18 @@ function bind() {
   $('palette').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) { if (plantSel === b.dataset.p && tool === 'plant') setTool('select'); else pickPlant(b.dataset.p); } });
   $('ground').addEventListener('pointerdown', onDown);
   window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp);
-  $('ground').addEventListener('contextmenu', (e) => { e.preventDefault(); const c = cellFromEvent(e); const bed = bedAt(c.gx, c.gy); if (bed) { pushUndo(); if (eraseAt(bed, c.gx - bed.x, c.gy - bed.y)) { save(); renderLayout(); } else undoStack.pop(); } });
+  $('ground').addEventListener('contextmenu', (e) => { e.preventDefault(); if (planNeedsPro()) return; const c = cellFromEvent(e); const bed = bedAt(c.gx, c.gy); if (bed) { pushUndo(); if (eraseAt(bed, c.gx - bed.x, c.gy - bed.y)) { save(); renderLayout(); } else undoStack.pop(); } });
   $('zoomIn').onclick = () => { zoom = Math.min(64, zoom + 6); renderLayout(); }; $('zoomOut').onclick = () => { zoom = Math.max(16, zoom - 6); renderLayout(); };
-  $('undoBtn').onclick = undo;
+  $('undoBtn').onclick = () => { if (!planNeedsPro()) undo(); };
   $('warnBtn').onclick = () => { $('warnList').innerHTML = warnings.map((w) => `<li class="${w.level}">${esc(w.text)}</li>`).join(''); $('warnDlg').showModal(); };
   $('warnClose').onclick = () => $('warnDlg').close();
   $('gSettingsBtn').onclick = openSettings; $('frostBtn').onclick = openSettings;
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input,textarea,select') || document.querySelector('dialog[open]')) return;
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (!planNeedsPro()) undo(); }
     else if (e.key === 'Escape') { setTool('select'); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && tab === 'layout') {
-      const bed = bedById(selBed); if (!bed) return;
+      const bed = bedById(selBed); if (!bed || planNeedsPro()) return;
       if (selPl) { pushUndo(); bed.pl = bed.pl.filter((x) => x.id !== selPl); selPl = ''; save(); renderLayout(); } else deleteBed(bed);
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') { e.preventDefault(); if (tab === 'calendar') printCalendar(); else printLayout(); }
   });
