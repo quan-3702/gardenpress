@@ -29,17 +29,33 @@ const PRO_IDS = [PRO_SKU];
 let STORE_URL = 'https://apps.microsoft.com/detail/9PNG3GQMPCWK';
 let proAvailable = false, proSku = PRO_SKU, isPro = false;
 proAvailable = true; // owner's rule: Pro is never free – free limits apply everywhere (website, Store, offline) until Pro is bought
-try { isPro = localStorage.getItem('gardenpress-pro') === '1'; } catch (_) {}
+// the cached Pro flag is never trusted on the website (nothing can be bought there) and in the Store app only for 30 days
+// after the Store last confirmed the purchase (offline buyers stay Pro; after that the Store is asked again)
+const HAS_STORE = typeof window !== 'undefined' && 'getDigitalGoodsService' in window;
+const PRO_OK_MS = 30 * 864e5;
+function cachedPro() {
+  try {
+    if (!HAS_STORE || localStorage.getItem('gardenpress-pro') !== '1') return false;
+    const raw = localStorage.getItem('gardenpress-pro-ok');
+    if (raw == null) { localStorage.setItem('gardenpress-pro-ok', String(Date.now())); return true; } // a buyer from before this check counts as confirmed now, once
+    const ok = Number(raw);
+    return ok > 0 && ok <= Date.now() + 864e5 && Date.now() - ok < PRO_OK_MS;
+  } catch (_) { return false; }
+}
+function rememberPro(owned) { try { if (owned) { localStorage.setItem('gardenpress-pro', '1'); localStorage.setItem('gardenpress-pro-ok', String(Date.now())); } else { localStorage.removeItem('gardenpress-pro'); localStorage.removeItem('gardenpress-pro-ok'); } } catch (_) {} }
+isPro = cachedPro();
 const TRIAL_DAYS = 7;
 let trialStart = 0;
-try { trialStart = Number(localStorage.getItem('gardenpress-trial')) || 0; } catch (_) {}
+// a trial start in the future, NaN or garbage counts as an ENDED trial (1 = long ago); missing = never started
+const trialVal = (v) => { if (v == null) return 0; const n = Number(v); return n > 0 && n <= Date.now() ? n : 1; };
+try { trialStart = trialVal(localStorage.getItem('gardenpress-trial')); } catch (_) {}
 const trialLeft = () => (trialStart ? Math.max(0, Math.ceil((trialStart + TRIAL_DAYS * DAY - Date.now()) / DAY)) : 0);
 const trialActive = () => trialLeft() > 0;
 const unlocked = () => isPro || !proAvailable || trialActive();
 const FREE_DOCS = 1;
 async function loadTrial() {
-  const t = await dbGet('trial').catch(() => 0);
-  trialStart = Math.max(trialStart, Number(t) || 0);
+  const t = await dbGet('trial').catch(() => undefined);
+  trialStart = Math.max(trialStart, trialVal(t)); // clearing only one of the two stores does not restart the trial
   if (trialStart) { try { localStorage.setItem('gardenpress-trial', String(trialStart)); } catch (_) {} dbSet('trial', trialStart).catch(() => {}); }
 }
 async function startTrial() {
@@ -56,7 +72,6 @@ async function billing() {
 }
 function setPro(v) {
   isPro = v;
-  try { localStorage.setItem('gardenpress-pro', v ? '1' : '0'); } catch (_) {}
   const b = $('proBtn');
   b.textContent = proLabel();
   b.classList.toggle('is-pro', v || trialActive());
@@ -79,7 +94,7 @@ async function checkPro() {
     if (details[0]) { proSku = details[0].itemId; if (!PRO_IDS.includes(proSku)) PRO_IDS.push(proSku); }
     const list = await svc.listPurchases();
     const owned = list.some((p) => PRO_IDS.includes(p.itemId));
-    if (owned || details.length) { setPro(owned); return owned; }
+    if (owned || details.length) { rememberPro(owned); setPro(owned); return owned; }
     setPro(isPro); // Store did not answer (offline): keep what we knew
     return isPro;
   } catch (_) { return isPro; }
@@ -122,6 +137,8 @@ async function buyPro() {
 const needsPro = (why) => { if (unlocked()) return false; openPro(why); return true; };
 // plans beyond the free one (made during the trial or restored earlier) can be viewed, backed up or deleted; editing or printing them needs Pro
 const lockedPlan = () => !unlocked() && docs.findIndex((d) => d.id === cur) >= FREE_DOCS;
+// your own plants are Pro: plants added during the trial or from a backup stay visible, but printing or copying them needs Pro
+const customNeedsPro = (beds) => !unlocked() && beds.some((b) => b.pl.some((x) => P(x.p).custom)) && needsPro('This uses your own plants, which are part of Pro. Remove them with the Erase tool to print or copy it with the free version.');
 const planNeedsPro = () => lockedPlan() && needsPro(`The free version keeps ${FREE_DOCS} garden plan. You can view, back up or delete this one – Pro lets you edit and print every plan.`);
 
 // ---------- toast ----------
@@ -395,6 +412,7 @@ function addBed(type) {
   G.beds.push(bed); selBed = bed.id; selPl = ''; setTool('select'); save();
 }
 function duplicateBed(bed) {
+  if (customNeedsPro([bed])) return;
   pushUndo();
   const s = freeSpot(bed.w, bed.h);
   const nb = JSON.parse(JSON.stringify(bed)); nb.id = uid('b'); nb.x = s.x; nb.y = s.y; nb.name = bed.name ? bed.name + ' copy' : ''; nb.pl.forEach((x) => (x.id = uid('p')));
@@ -595,7 +613,7 @@ function printHtml(html, landscape) {
 }
 const printHead = (title) => `<div class="pr-head"><b>${esc(G.name)}</b> – ${title}<span>Season ${G.year} · last frost ${fmtD(LF())} · first frost ${fmtD(FF())}</span></div>`;
 function printLayout() {
-  if (planNeedsPro()) return;
+  if (planNeedsPro() || customNeedsPro(G.beds)) return;
   const land = G.w > G.h * 1.15;
   const maxW = land ? 960 : 700, maxH = land ? 560 : 640;
   const z = Math.max(8, Math.min(44, Math.floor(Math.min(maxW / G.w, maxH / G.h))));

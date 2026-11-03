@@ -234,3 +234,7 @@ tr.clickable:hover td { background: var(--accent-2); }
   .tabs button { white-space: nowrap; padding: 6px 10px; }
   .g-row { grid-template-columns: 150px 1fr; }
 }
+
+/* feedback note */
+.feedback { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 12px 0 0; overflow-wrap: anywhere; }
+.feedback a { color: inherit; text-decoration: underline; }
