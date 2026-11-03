@@ -28,6 +28,7 @@ const PRO_SKU = 'gardenpress_pro';
 const PRO_IDS = [PRO_SKU];
 let STORE_URL = 'https://apps.microsoft.com/detail/9PNG3GQMPCWK';
 let proAvailable = false, proSku = PRO_SKU, isPro = false;
+try { if ('getDigitalGoodsService' in window && localStorage.getItem('gardenpress-proavail') === '1') proAvailable = true; } catch (_) {} // keep Pro limits when offline
 try { isPro = localStorage.getItem('gardenpress-pro') === '1'; } catch (_) {}
 const TRIAL_DAYS = 7;
 let trialStart = 0;
@@ -62,17 +63,26 @@ function setPro(v) {
   b.hidden = !proAvailable && !v;
   if (G) renderAll();
 }
+async function checkProAfterBuy() {
+  for (let i = 0; i < 6; i++) {
+    if (await checkPro()) return true;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  proMessage('Thank you! If Pro is not unlocked within a minute, click “Restore purchase”.');
+  return false;
+}
 async function checkPro() {
   const svc = await billing();
   if (!svc) return false;
   try {
     const details = await svc.getDetails(PRO_IDS).catch(() => []);
-    proAvailable = details.length > 0;
+    if (details.length) { proAvailable = true; try { localStorage.setItem('gardenpress-proavail', '1'); } catch (_) {} }
     if (details[0]) { proSku = details[0].itemId; if (!PRO_IDS.includes(proSku)) PRO_IDS.push(proSku); }
     const list = await svc.listPurchases();
     const owned = list.some((p) => PRO_IDS.includes(p.itemId));
-    setPro(owned);
-    return owned;
+    if (owned || details.length) { setPro(owned); return owned; }
+    setPro(isPro); // Store did not answer (offline): keep what we knew
+    return isPro;
   } catch (_) { return isPro; }
 }
 function proMessage(text) { const m = $('proMsg'); m.hidden = !text; m.textContent = text || ''; }
@@ -107,7 +117,7 @@ async function buyPro() {
     proMessage('Purchase could not be completed: ' + (e.message || e));
     return;
   }
-  if (await checkPro()) { proMessage('Thank you! Pro is unlocked. ★'); setTimeout(() => $('proDialog').close(), 1500); }
+  if (await checkProAfterBuy()) { proMessage('Thank you! Pro is unlocked. ★'); setTimeout(() => $('proDialog').close(), 1500); }
 }
 const needsPro = (why) => { if (unlocked()) return false; openPro(why); return true; };
 
@@ -119,7 +129,7 @@ function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = fals
 let custom = [];
 function applyCustom() {
   for (const k of Object.keys(PLANT)) if (PLANT[k].custom) delete PLANT[k];
-  for (const c of custom) { const b = PLANT[c.base] || PLANT.tomato; PLANT[c.id] = { ...b, id: c.id, name: c.name, ic: c.ic || b.ic, sq: c.sq || b.sq, dtm: c.dtm || b.dtm, custom: true, base: c.base }; }
+  for (const c of custom) { const b = PLANT[c.base] || PLANT.tomato; PLANT[c.id] = { ...b, id: c.id, name: c.name, ic: c.ic ? esc(c.ic) : b.ic, sq: c.sq || b.sq, dtm: c.dtm || b.dtm, custom: true, base: c.base }; }
 }
 const allPlants = () => [...PLANTS, ...custom.map((c) => PLANT[c.id]).filter(Boolean)];
 const P = (id) => PLANT[id] || { id, name: 'Unknown plant', ic: '❔', col: '#999', cat: 'veg', fam: 'other', sq: 1, size: 1, dtm: 60, hw: 4, comp: [], avoid: [], tip: '' };
@@ -240,7 +250,7 @@ function checkGarden() {
       const a = bed.pl[i], b = bed.pl[j];
       if (a.p === b.p || !touching(a, b)) continue;
       const pa = P(a.p), pb = P(b.p);
-      if ((pa.avoid || []).includes(pb.id) || (pb.avoid || []).includes(pa.id) || (pa.base && (PLANT[pa.base].avoid || []).includes(pb.id))) {
+      if ((pa.avoid || []).includes(pb.id) || (pb.avoid || []).includes(pa.id) || (pa.base && ((PLANT[pa.base] || {}).avoid || []).includes(pb.id))) {
         conflicts.add(a.id); conflicts.add(b.id);
         const key = [pa.name, pb.name].sort().join('|') + bn;
         if (!out.some((o) => o.key === key)) out.push({ key, level: 'bad', text: `${pa.ic} ${pa.name} and ${pb.ic} ${pb.name} are next to each other in “${bn}” – they don't grow well together.` });
@@ -723,8 +733,10 @@ function bind() {
     const w = clamp(+$('sW').value || G.w, 4, 120), h = clamp(+$('sH').value || G.h, 4, 120);
     const last = $('sLast').value, first = $('sFirst').value;
     if (!last || !first || parseD(first) <= parseD(last)) return toast('The first fall frost must come after the last spring frost.');
+    const year = Math.round(+$('sYear').value) || G.year;
+    if (year < 2000 || year > 2100) return toast('Type a season year between 2000 and 2100.');
     pushUndo();
-    Object.assign(G, { name: $('sName').value.trim() || G.name, year: +$('sYear').value || G.year, units: $('sUnits').value, zone: $('sZone').value, last, first, w, h });
+    Object.assign(G, { name: $('sName').value.trim() || G.name, year, units: $('sUnits').value, zone: $('sZone').value, last, first, w, h });
     for (const b of G.beds) { b.w = Math.min(b.w, w); b.h = Math.min(b.h, h); b.x = clamp(b.x, 0, w - b.w); b.y = clamp(b.y, 0, h - b.h); trimBed(b); }
     save(); syncDoc(); $('setDlg').close(); renderAll();
   };
